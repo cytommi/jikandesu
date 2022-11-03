@@ -1,6 +1,5 @@
 import {
   component$,
-  createContext,
   useClientEffect$,
   useContextProvider,
   useStore,
@@ -11,24 +10,28 @@ import {
   requestPermission,
   sendNotification,
 } from "@tauri-apps/api/notification";
+import { TimerContext } from "./TimerContext";
 
-interface ClockStore {
+export type Interval = { minutes: number };
+
+export interface ClockStore {
   currentTime: Date;
-  alarm: Date;
+  alarm: Date | undefined;
+  interval: Interval | undefined;
 }
-
-export const timerContext = createContext("pomodoro-timer");
 
 export default component$(() => {
   const timerState = useStore<ClockStore>(() => {
     const curTime = new Date();
     return {
       currentTime: curTime,
-      alarm: new Date(curTime.setSeconds(curTime.getSeconds() + 3)),
+      interval: undefined,
+      alarm: undefined,
+      // alarm: new Date(curTime.setSeconds(curTime.getSeconds() + 3)),
     };
   });
 
-  useContextProvider(timerContext, timerState);
+  useContextProvider(TimerContext, timerState);
 
   useClientEffect$(async () => {
     let permissionGranted = await isPermissionGranted();
@@ -38,21 +41,29 @@ export default component$(() => {
     }
   }, {});
 
-  useClientEffect$(async () => {
+  useClientEffect$(async ({ track }) => {
+    track(() => timerState.interval);
+
     const timer = setInterval(() => {
       timerState.currentTime = new Date();
-      console.log({ timerState });
-      if (timerState.currentTime >= timerState?.alarm) {
-        sendNotification({ title: "JIKANDESU", body: "KYUUUUUUUKEIIIIIIII" });
+      if (
+        timerState.alarm != null &&
+        timerState.interval != null &&
+        timerState.currentTime >= timerState.alarm
+      ) {
+        sendNotification({
+          title: "JIKANDESU",
+          body: `It has been ${timerState.interval.minutes} minutes! Takes a break!`,
+        });
         clearInterval(timer);
       }
     }, 1000);
+
     return () => clearInterval(timer);
   });
 
   return (
     <div>
-      <h1>Current time: {timerState.currentTime.toTimeString()}</h1>
       <SetTimerForm />
     </div>
   );
